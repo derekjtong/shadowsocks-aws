@@ -58,7 +58,7 @@ python shadowsocks_deployment.py
    * Public IP
    * Port (default 8488)
    * Shadowsocks password
-  
+5. (Optional) Add `start.sh` to `ec2-user` home for easy control
 ### Example Output
 ```
 --- Shadowsocks ---
