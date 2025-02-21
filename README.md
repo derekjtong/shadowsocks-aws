@@ -66,6 +66,13 @@ IP Address: 3.92.183.45
 Port: 8488
 Shadowsocks Password: insert_your_password_here
 ```
+
+### Uptime Server
+
+Optional uptime server
+
+`https://github.com/derekjtong/shadowsocks_status`
+
 ## AWS Services Used
 * EC2
 * SSM Parameter Store
