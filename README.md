@@ -71,7 +71,7 @@ Shadowsocks Password: insert_your_password_here
 
 Optional uptime server
 
-`https://github.com/derekjtong/shadowsocks_status`
+https://github.com/derekjtong/shadowsocks_status
 
 ## AWS Services Used
 * EC2
