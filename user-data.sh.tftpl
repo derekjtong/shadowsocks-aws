@@ -1,0 +1,62 @@
+#!/bin/bash
+set -euo pipefail
+
+exec > >(tee -a /var/log/user-data.log) 2>&1
+echo "USERDATA START $(date -Is)"
+
+# Set password directly from Terraform variable
+SS_PASSWORD="${ss_password}"
+echo "export SS_PASSWORD=$SS_PASSWORD" >> /etc/profile.d/ss.sh
+
+# Install Go (your script used yum; support both yum/dnf)
+yum install -y golang || dnf install -y golang
+
+export GOPATH=/root/go
+export GOCACHE=/root/.cache/go-build
+export PATH=$GOPATH/bin:/usr/local/bin:/usr/bin:/bin:$PATH
+
+cat > /etc/profile.d/go.sh <<'SH'
+export GOPATH=/root/go
+export GOCACHE=/root/.cache/go-build
+export PATH=$GOPATH/bin:/usr/local/bin:/usr/bin:/bin:$PATH
+SH
+chmod +x /etc/profile.d/go.sh
+source /etc/profile.d/go.sh
+
+mkdir -p "$GOPATH" "$GOCACHE"
+
+# Install Shadowsocks
+go install github.com/shadowsocks/go-shadowsocks2@latest
+
+# Install screen for the start script
+yum install -y screen || dnf install -y screen
+
+# Create start.sh script
+cat > /home/ec2-user/shadowsocks-service.sh <<'STARTSH'
+${service_script}
+STARTSH
+
+chmod +x /home/ec2-user/shadowsocks-service.sh
+chown ec2-user:ec2-user /home/ec2-user/shadowsocks-service.sh
+
+# Create systemd unit with password directly embedded
+cat >/etc/systemd/system/shadowsocks.service <<UNIT
+[Unit]
+Description=Shadowsocks (go-shadowsocks2)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/root/go/bin/go-shadowsocks2 -s "ss://${ss_cipher}:$SS_PASSWORD@[::]:8488" -verbose
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+
+systemctl daemon-reload
+systemctl enable --now shadowsocks
+systemctl status shadowsocks --no-pager -l
+journalctl -u shadowsocks --no-pager -n 200
