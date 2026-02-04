@@ -211,9 +211,9 @@ resource "aws_security_group" "ss" {
 # -----------------------
 locals {
   user_data = templatefile("${path.module}/user-data.sh.tftpl", {
-    ss_password      = var.ss_password
-    ss_cipher        = var.ss_cipher
-    service_script   = file("${path.module}/shadowsocks-service.sh")
+    ss_password    = var.ss_password
+    ss_cipher      = var.ss_cipher
+    service_script = file("${path.module}/shadowsocks-service.sh")
   })
 }
 
