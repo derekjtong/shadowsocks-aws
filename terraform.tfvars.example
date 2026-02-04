@@ -1,0 +1,30 @@
+# Shadowsocks Configuration
+# Copy this file to terraform.tfvars and customize for your setup
+# Usage: cp terraform.tfvars.example terraform.tfvars
+
+# REQUIRED: Shadowsocks password (no default)
+ss_password = "your-secure-password-here"
+
+# Optional: Encryption cipher (default: AEAD_CHACHA20_POLY1305)
+# Options: "AEAD_CHACHA20_POLY1305" or "AEAD_AES_256_GCM"
+# ss_cipher = "AEAD_CHACHA20_POLY1305"
+
+# Optional: AWS region (default: ap-east-1)
+# aws_region = "ap-east-1"
+
+# Optional: EC2 instance type (default: t4g.nano)
+# Options: "t3.nano" (x86) or "t4g.nano" (ARM)
+# instance_type = "t4g.nano"
+
+# Optional: Amazon Linux version (default: al2023)
+# Options: "al2023" or "al2"
+# amazon_linux_generation = "al2023"
+
+# Optional: SSH access CIDR (default: 0.0.0.0/0)
+# Strongly recommended: Restrict to your IP address or CIDR range
+# Example: ssh_cidr = "203.0.113.0/24"
+# ssh_cidr = "0.0.0.0/0"
+
+# Optional: Use IPv6 only (default: false)
+# Note: Currently unsupported due to many sites not supporting IPv6
+# ipv6_only = false
