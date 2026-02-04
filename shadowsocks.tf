@@ -236,6 +236,17 @@ locals {
   # Install Shadowsocks
   go install github.com/shadowsocks/go-shadowsocks2@latest
 
+  # Install screen for the start script
+  yum install -y screen || dnf install -y screen
+
+  # Create start.sh script
+  cat > /home/ec2-user/start.sh <<'STARTSH'
+${file("${path.module}/start.sh")}
+STARTSH
+
+  chmod +x /home/ec2-user/start.sh
+  chown ec2-user:ec2-user /home/ec2-user/start.sh
+
   # Run shadowsocks and log
   nohup $GOPATH/bin/go-shadowsocks2 -s "ss://AEAD_CHACHA20_POLY1305:$SS_PASSWORD@:8488" -verbose > /tmp/shadowsocks.log 2>&1 &
   EOF
