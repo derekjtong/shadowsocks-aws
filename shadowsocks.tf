@@ -153,7 +153,7 @@ resource "aws_security_group" "ss" {
 # -----------------------
 data "aws_iam_policy_document" "ec2_trust" {
   statement {
-    effect = "Allow"
+    effect  = "Allow"
     actions = ["sts:AssumeRole"]
     principals {
       type        = "Service"
@@ -169,7 +169,7 @@ resource "aws_iam_role" "ssm_access" {
 
 data "aws_iam_policy_document" "ssm_get_parameter" {
   statement {
-    effect  = "Allow"
+    effect = "Allow"
     actions = [
       "ssm:GetParameter",
       "ssm:GetParameters"
