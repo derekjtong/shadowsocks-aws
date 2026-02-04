@@ -46,12 +46,19 @@ variable "amazon_linux_generation" {
 
 variable "ss_password" {
   type      = string
+  default   = "123"
   sensitive = true
 }
 
 variable "ssh_cidr" {
   type    = string
   default = "0.0.0.0/0" # strongly recommend setting to your IP/CIDR
+}
+
+variable "ipv6_only" {
+  type        = bool
+  default     = false
+  description = "Use IPv6 only instead of IPv4. Automatically creates IPv6-enabled subnet."
 }
 
 # -----------------------
@@ -96,15 +103,53 @@ data "aws_subnets" "default" {
   }
 }
 
-# -----------------------
-# SSM Parameter
-# -----------------------
-resource "aws_ssm_parameter" "ss_password" {
-  name        = "ss_password"
-  description = "Password for Shadowsocks server"
-  type        = "SecureString"
-  value       = var.ss_password
-  overwrite   = true
+# Enable IPv6 on the default VPC if ipv6_only is true
+resource "aws_vpc_ipv6_cidr_block_association" "default" {
+  count = var.ipv6_only ? 1 : 0
+
+  vpc_id                           = data.aws_vpc.default.id
+  assign_generated_ipv6_cidr_block = true
+}
+
+# Get availability zones to create IPv6 subnet
+data "aws_availability_zones" "available" {
+  count = var.ipv6_only ? 1 : 0
+
+  state = "available"
+}
+
+# Create a new subnet with IPv6 enabled
+resource "aws_subnet" "ipv6" {
+  count = var.ipv6_only ? 1 : 0
+
+  vpc_id                          = data.aws_vpc.default.id
+  cidr_block                      = "172.31.128.0/20" # Non-overlapping CIDR in default VPC range
+  ipv6_cidr_block                 = cidrsubnet(aws_vpc_ipv6_cidr_block_association.default[0].ipv6_cidr_block, 8, 1)
+  assign_ipv6_address_on_creation = true
+  availability_zone               = data.aws_availability_zones.available[0].names[0]
+
+  tags = {
+    Name = "shadowsocks-ipv6-subnet"
+  }
+}
+
+# Get the default internet gateway for IPv6 routing
+data "aws_internet_gateway" "default" {
+  count = var.ipv6_only ? 1 : 0
+
+  filter {
+    name   = "attachment.vpc-id"
+    values = [data.aws_vpc.default.id]
+  }
+}
+
+# Add IPv6 route to the main route table
+resource "aws_route" "ipv6_default" {
+  count = var.ipv6_only ? 1 : 0
+
+  route_table_id              = data.aws_vpc.default.main_route_table_id
+  destination_ipv6_cidr_block = "::/0"
+  gateway_id                  = data.aws_internet_gateway.default[0].id
 }
 
 # -----------------------
@@ -116,86 +161,40 @@ resource "aws_security_group" "ss" {
   vpc_id      = data.aws_vpc.default.id
 
   ingress {
-    description = "Shadowsocks TCP"
-    from_port   = 8488
-    to_port     = 8488
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    description      = "Shadowsocks TCP"
+    from_port        = 8488
+    to_port          = 8488
+    protocol         = "tcp"
+    cidr_blocks      = var.ipv6_only ? [] : ["0.0.0.0/0"]
+    ipv6_cidr_blocks = var.ipv6_only ? ["::/0"] : []
   }
 
   ingress {
-    description = "Shadowsocks UDP"
-    from_port   = 8488
-    to_port     = 8488
-    protocol    = "udp"
-    cidr_blocks = ["0.0.0.0/0"]
+    description      = "Shadowsocks UDP"
+    from_port        = 8488
+    to_port          = 8488
+    protocol         = "udp"
+    cidr_blocks      = var.ipv6_only ? [] : ["0.0.0.0/0"]
+    ipv6_cidr_blocks = var.ipv6_only ? ["::/0"] : []
   }
 
   ingress {
-    description = "SSH"
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = [var.ssh_cidr]
+    description      = "SSH"
+    from_port        = 22
+    to_port          = 22
+    protocol         = "tcp"
+    cidr_blocks      = var.ipv6_only ? [] : [var.ssh_cidr]
+    ipv6_cidr_blocks = var.ipv6_only ? ["::/0"] : []
   }
 
   egress {
-    description = "All egress"
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
+    description      = "All egress"
+    from_port        = 0
+    to_port          = 0
+    protocol         = "-1"
+    cidr_blocks      = var.ipv6_only ? [] : ["0.0.0.0/0"]
+    ipv6_cidr_blocks = var.ipv6_only ? ["::/0"] : []
   }
-}
-
-# -----------------------
-# IAM Role + Instance Profile
-# -----------------------
-data "aws_iam_policy_document" "ec2_trust" {
-  statement {
-    effect  = "Allow"
-    actions = ["sts:AssumeRole"]
-    principals {
-      type        = "Service"
-      identifiers = ["ec2.amazonaws.com"]
-    }
-  }
-}
-
-resource "aws_iam_role" "ssm_access" {
-  name               = "SSMAccessRole"
-  assume_role_policy = data.aws_iam_policy_document.ec2_trust.json
-}
-
-data "aws_iam_policy_document" "ssm_get_parameter" {
-  statement {
-    effect = "Allow"
-    actions = [
-      "ssm:GetParameter",
-      "ssm:GetParameters"
-    ]
-    resources = [aws_ssm_parameter.ss_password.arn]
-  }
-
-  # If your SecureString uses the default AWS-managed key for SSM in the account/region,
-  # this often works without explicit kms:Decrypt. If you use a customer-managed CMK,
-  # you MUST add kms:Decrypt for that key ARN.
-  # statement {
-  #   effect = "Allow"
-  #   actions = ["kms:Decrypt"]
-  #   resources = ["arn:aws:kms:REGION:ACCOUNT:key/YOUR_KEY_ID"]
-  # }
-}
-
-resource "aws_iam_role_policy" "inline" {
-  name   = "SSMAccessPolicy"
-  role   = aws_iam_role.ssm_access.id
-  policy = data.aws_iam_policy_document.ssm_get_parameter.json
-}
-
-resource "aws_iam_instance_profile" "ss_profile" {
-  name = "SSMAccessRole-InstanceProfile"
-  role = aws_iam_role.ssm_access.name
 }
 
 # -----------------------
@@ -203,52 +202,68 @@ resource "aws_iam_instance_profile" "ss_profile" {
 # -----------------------
 locals {
   user_data = <<-EOF
-  #!/bin/bash
-  set -euo pipefail
+#!/bin/bash
+set -euo pipefail
 
-  # Ensure AWS CLI exists (most AL2/AL2023 AMIs have it; this is defensive)
-  if ! command -v aws >/dev/null 2>&1; then
-    yum install -y awscli || dnf install -y awscli
-  fi
+exec > >(tee -a /var/log/user-data.log) 2>&1
+echo "USERDATA START $(date -Is)"
 
-  # Fetch the password from Parameter Store
-  SS_PASSWORD=$(aws ssm get-parameter --name "ss_password" --with-decryption --query "Parameter.Value" --output text)
-  echo "export SS_PASSWORD=$SS_PASSWORD" > /etc/profile.d/ss.sh
-  chmod +x /etc/profile.d/ss.sh
+# Set password directly from Terraform variable
+SS_PASSWORD="${var.ss_password}"
+echo "export SS_PASSWORD=$SS_PASSWORD" >> /etc/profile.d/ss.sh
 
-  # Install Go (your script used yum; support both yum/dnf)
-  yum install -y golang || dnf install -y golang
+# Install Go (your script used yum; support both yum/dnf)
+yum install -y golang || dnf install -y golang
 
-  export GOPATH=/root/go
-  export GOCACHE=/root/.cache/go-build
-  export PATH=$GOPATH/bin:/usr/local/bin:/usr/bin:/bin:$PATH
+export GOPATH=/root/go
+export GOCACHE=/root/.cache/go-build
+export PATH=$GOPATH/bin:/usr/local/bin:/usr/bin:/bin:$PATH
 
-  cat > /etc/profile.d/go.sh <<'SH'
-  export GOPATH=/root/go
-  export GOCACHE=/root/.cache/go-build
-  export PATH=$GOPATH/bin:/usr/local/bin:/usr/bin:/bin:$PATH
-  SH
-  chmod +x /etc/profile.d/go.sh
-  source /etc/profile.d/go.sh
+cat > /etc/profile.d/go.sh <<'SH'
+export GOPATH=/root/go
+export GOCACHE=/root/.cache/go-build
+export PATH=$GOPATH/bin:/usr/local/bin:/usr/bin:/bin:$PATH
+SH
+chmod +x /etc/profile.d/go.sh
+source /etc/profile.d/go.sh
 
-  mkdir -p "$GOPATH" "$GOCACHE"
+mkdir -p "$GOPATH" "$GOCACHE"
 
-  # Install Shadowsocks
-  go install github.com/shadowsocks/go-shadowsocks2@latest
+# Install Shadowsocks
+go install github.com/shadowsocks/go-shadowsocks2@latest
 
-  # Install screen for the start script
-  yum install -y screen || dnf install -y screen
+# Install screen for the start script
+yum install -y screen || dnf install -y screen
 
-  # Create start.sh script
-  cat > /home/ec2-user/start.sh <<'STARTSH'
-${file("${path.module}/start.sh")}
+# Create start.sh script
+cat > /home/ec2-user/start-terraform.sh <<'STARTSH'
+${file("${path.module}/start-terraform.sh")}
 STARTSH
 
-  chmod +x /home/ec2-user/start.sh
-  chown ec2-user:ec2-user /home/ec2-user/start.sh
+chmod +x /home/ec2-user/start-terraform.sh
+chown ec2-user:ec2-user /home/ec2-user/start-terraform.sh
 
-  # Run shadowsocks and log
-  nohup $GOPATH/bin/go-shadowsocks2 -s "ss://AEAD_CHACHA20_POLY1305:$SS_PASSWORD@:8488" -verbose > /tmp/shadowsocks.log 2>&1 &
+# Create systemd unit with password directly embedded
+cat >/etc/systemd/system/shadowsocks.service <<UNIT
+[Unit]
+Description=Shadowsocks (go-shadowsocks2)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/root/go/bin/go-shadowsocks2 -s "ss://AEAD_AES_256_GCM:$SS_PASSWORD@[::]:8488" -verbose
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+
+systemctl daemon-reload
+systemctl enable --now shadowsocks
+systemctl status shadowsocks --no-pager -l
+journalctl -u shadowsocks --no-pager -n 200
   EOF
 }
 
@@ -259,9 +274,9 @@ resource "aws_instance" "ss" {
   ami           = data.aws_ami.amazon_linux.id
   instance_type = var.instance_type
 
-  subnet_id              = data.aws_subnets.default.ids[0]
+  subnet_id              = var.ipv6_only ? aws_subnet.ipv6[0].id : data.aws_subnets.default.ids[0]
   vpc_security_group_ids = [aws_security_group.ss.id]
-  iam_instance_profile   = aws_iam_instance_profile.ss_profile.name
+  ipv6_address_count     = var.ipv6_only ? 1 : 0
 
   user_data = local.user_data
 
@@ -271,7 +286,13 @@ resource "aws_instance" "ss" {
 }
 
 output "public_ip" {
-  value = aws_instance.ss.public_ip
+  value       = var.ipv6_only ? null : aws_instance.ss.public_ip
+  description = "Public IPv4 address (null if IPv6 only)"
+}
+
+output "ipv6_address" {
+  value       = var.ipv6_only ? try(aws_instance.ss.ipv6_addresses[0], null) : null
+  description = "IPv6 address (null if IPv4 only)"
 }
 
 output "ss_port" {
