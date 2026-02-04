@@ -18,7 +18,7 @@ provider "aws" {
 # -----------------------
 variable "aws_region" {
   type    = string
-  default = "us-east-1"
+  default = "ap-east-1"
 }
 
 variable "instance_type" {
@@ -70,7 +70,7 @@ data "aws_ami" "amazon_linux" {
 
   filter {
     name   = "name"
-    values = var.amazon_linux_generation == "al2023" ? ["al2023-ami-*-linux-*-${local.architecture}*"] : ["amzn2-ami-hvm-*-${local.architecture}-gp2"]
+    values = var.amazon_linux_generation == "al2023" ? ["al2023-ami-*-kernel-*-${local.architecture}"] : ["amzn2-ami-hvm-*-${local.architecture}-gp2"]
   }
 
   filter {
