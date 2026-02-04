@@ -79,6 +79,13 @@ terraform destroy
 
 ### Option 2: Python Script Deployment
 
+> **⚠️ DEPRECATED**: This deployment method is outdated and no longer actively maintained. Please use the Terraform deployment (Option 1) for new deployments. The Python script has the following limitations:
+> - Hardcoded, region-specific AMI ID that may be outdated
+> - No support for ARM instances (t4g.nano)
+> - No systemd service configuration (runs as background process)
+> - Requires additional AWS services (SSM Parameter Store, IAM roles)
+> - Less robust and harder to maintain
+
 #### Prerequisites
 
 1. AWS CLI: Ensure that the AWS CLI is installed and configured with appropriate credentials. To set up, use
