@@ -4,6 +4,7 @@
 
 case "${1:-status}" in
     start)
+        sudo systemctl daemon-reload
         sudo systemctl start shadowsocks
         sudo systemctl status shadowsocks
         ;;
@@ -11,7 +12,9 @@ case "${1:-status}" in
         sudo systemctl stop shadowsocks
         ;;
     restart)
+        sudo systemctl daemon-reload
         sudo systemctl restart shadowsocks
+        sudo systemctl status shadowsocks
         ;;
     status)
         sudo systemctl status shadowsocks

@@ -236,12 +236,12 @@ go install github.com/shadowsocks/go-shadowsocks2@latest
 yum install -y screen || dnf install -y screen
 
 # Create start.sh script
-cat > /home/ec2-user/start-terraform.sh <<'STARTSH'
-${file("${path.module}/start-terraform.sh")}
+cat > /home/ec2-user/shadowsocks-service.sh <<'STARTSH'
+${file("${path.module}/shadowsocks-service.sh")}
 STARTSH
 
-chmod +x /home/ec2-user/start-terraform.sh
-chown ec2-user:ec2-user /home/ec2-user/start-terraform.sh
+chmod +x /home/ec2-user/shadowsocks-service.sh
+chown ec2-user:ec2-user /home/ec2-user/shadowsocks-service.sh
 
 # Create systemd unit with password directly embedded
 cat >/etc/systemd/system/shadowsocks.service <<UNIT
