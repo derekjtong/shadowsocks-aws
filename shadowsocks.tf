@@ -21,14 +21,27 @@ variable "aws_region" {
   default = "us-east-1"
 }
 
-variable "ami_id" {
-  type    = string
-  default = "ami-0cb183c3095c323ed" # your current AMI
-}
-
 variable "instance_type" {
   type    = string
-  default = "t3.nano"
+  default = "t4g.nano"
+
+  validation {
+    condition = contains(
+      ["t3.nano", "t4g.nano"],
+      var.instance_type
+    )
+    error_message = "instance_type must be t3.nano or t4g.nano."
+  }
+}
+
+variable "amazon_linux_generation" {
+  type    = string
+  default = "al2023"
+
+  validation {
+    condition     = contains(["al2023", "al2"], var.amazon_linux_generation)
+    error_message = "Use al2023 or al2."
+  }
 }
 
 variable "ss_password" {
@@ -39,6 +52,36 @@ variable "ss_password" {
 variable "ssh_cidr" {
   type    = string
   default = "0.0.0.0/0" # strongly recommend setting to your IP/CIDR
+}
+
+# -----------------------
+# Architecture Detection
+# -----------------------
+locals {
+  architecture = startswith(var.instance_type, "t4g") ? "arm64" : "x86_64"
+}
+
+# -----------------------
+# AMI Selection
+# -----------------------
+data "aws_ami" "amazon_linux" {
+  most_recent = true
+  owners      = ["amazon"]
+
+  filter {
+    name   = "name"
+    values = var.amazon_linux_generation == "al2023" ? ["al2023-ami-*-linux-*-${local.architecture}*"] : ["amzn2-ami-hvm-*-${local.architecture}-gp2"]
+  }
+
+  filter {
+    name   = "architecture"
+    values = [local.architecture]
+  }
+
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
+  }
 }
 
 # If you want to place this in the default VPC:
@@ -202,8 +245,9 @@ locals {
 # EC2 instance
 # -----------------------
 resource "aws_instance" "ss" {
-  ami                    = var.ami_id
-  instance_type          = var.instance_type
+  ami           = data.aws_ami.amazon_linux.id
+  instance_type = var.instance_type
+
   subnet_id              = data.aws_subnets.default.ids[0]
   vpc_security_group_ids = [aws_security_group.ss.id]
   iam_instance_profile   = aws_iam_instance_profile.ss_profile.name
