@@ -58,7 +58,7 @@ variable "ssh_cidr" {
 variable "ipv6_only" {
   type        = bool
   default     = false
-  description = "Use IPv6 only instead of IPv4. Automatically creates IPv6-enabled subnet."
+  description = "Use IPv6 only instead of IPv4. Automatically creates IPv6-enabled subnet. Currently unsupported due many sites not supporting IPv6, notably GitHub"
 }
 
 # -----------------------
