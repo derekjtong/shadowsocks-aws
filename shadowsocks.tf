@@ -46,8 +46,17 @@ variable "amazon_linux_generation" {
 
 variable "ss_password" {
   type      = string
-  default   = "123"
   sensitive = true
+}
+
+variable "ss_cipher" {
+  type    = string
+  default = "AEAD_CHACHA20_POLY1305"
+
+  validation {
+    condition     = contains(["AEAD_CHACHA20_POLY1305", "AEAD_AES_256_GCM"], var.ss_cipher)
+    error_message = "ss_cipher must be AEAD_CHACHA20_POLY1305 or AEAD_AES_256_GCM."
+  }
 }
 
 variable "ssh_cidr" {
@@ -252,7 +261,7 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=/root/go/bin/go-shadowsocks2 -s "ss://AEAD_AES_256_GCM:$SS_PASSWORD@[::]:8488" -verbose
+ExecStart=/root/go/bin/go-shadowsocks2 -s "ss://${var.ss_cipher}:$SS_PASSWORD@[::]:8488" -verbose
 Restart=always
 RestartSec=2
 
